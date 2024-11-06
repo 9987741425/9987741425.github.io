@@ -129,74 +129,81 @@
         let bossData = {};
 
         // CSVからデータを読み込む関数
-async function loadBossData() {
-    try {
-        const response = await fetch('https://raw.githubusercontent.com/9987741425/9987741425.github.io/main/bosses.csv');
-        const csvText = await response.text();
-        
-        // CSVパース
-        const rows = csvText.split('\n');
-        let currentBoss = '';
-        
-        rows.forEach(row => {
-            if (!row.trim()) return;
-            
-            // データを解析
-            const match = row.match(/^([^バフ名]+)(バフ名Lv\d+)?(.+)?$/);
-            if (!match) return;
-
-            let [_, bossName, lvPart, rest] = match;
-            bossName = bossName.trim();
-
-            if (bossName && !bossName.includes('バフ')) {
-                currentBoss = bossName;
-                if (!bossData[currentBoss]) {
-                    bossData[currentBoss] = [];
-                }
-            }
-
-            if (lvPart) {
-                const level = "Lv" + lvPart.match(/\d+/)[0];
-                const name = rest.replace(/バフ説明Lv\d+/, '').trim();
-                const nextRow = rows[rows.indexOf(row) + 1];
-                const description = nextRow ? nextRow.replace(/^[^バフ説明]*バフ説明Lv\d+/, '').trim() : '';
-
-                if (currentBoss && name && description) {
-                    const existingBuff = bossData[currentBoss].find(buff => buff.level === level);
-                    if (existingBuff) {
-                        existingBuff.name = name;
-                        existingBuff.description = description;
-                    } else {
-                        bossData[currentBoss].push({
-                            level,
-                            name,
-                            description
-                        });
+        async function loadBossData() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/9987741425/9987741425.github.io/main/bosses.csv');
+                const csvText = await response.text();
+                
+                // CSVパース
+                const rows = csvText.split('\n');
+                let currentBoss = '';
+                let currentLevel = '';
+                let buffName = '';
+                
+                // ヘッダー行をスキップ
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i].trim();
+                    if (!row) continue;
+                    
+                    // カンマで分割（CSVの各フィールドを取得）
+                    const [boss, type, level, content] = row.split(',').map(field => field.trim());
+                    
+                    // ボス名が空でない場合は処理
+                    if (boss && boss !== '不特定') {
+                        // 新しいボスの場合、データ構造を初期化
+                        if (!bossData[boss]) {
+                            bossData[boss] = [];
+                        }
+                        currentBoss = boss;
+                        
+                        // バフ名の行の場合
+                        if (type === 'バフ名') {
+                            currentLevel = level;
+                            buffName = content;
+                            
+                            // 既存のバフを探す
+                            let existingBuff = bossData[currentBoss].find(buff => buff.level === level);
+                            if (!existingBuff) {
+                                // 新しいバフを追加
+                                bossData[currentBoss].push({
+                                    level: level,
+                                    name: buffName,
+                                    description: ''
+                                });
+                            } else {
+                                // 既存のバフ名を更新
+                                existingBuff.name = buffName;
+                            }
+                        }
+                        // バフ説明の行の場合
+                        else if (type === 'バフ説明') {
+                            // 対応するバフを探して説明を更新
+                            const buff = bossData[currentBoss].find(buff => buff.level === level);
+                            if (buff) {
+                                buff.description = content;
+                            }
+                        }
                     }
                 }
+                
+                // レベル順にソート
+                Object.keys(bossData).forEach(bossName => {
+                    bossData[bossName].sort((a, b) => {
+                        const levelA = parseInt(a.level.replace('Lv', ''));
+                        const levelB = parseInt(b.level.replace('Lv', ''));
+                        return levelA - levelB;
+                    });
+                });
+                
+                // セレクトボックスの初期化
+                initializeSelectors();
+                
+            } catch (error) {
+                console.error('Error loading boss data:', error);
+                document.getElementById('bossContainer').innerHTML = 
+                    '<div class="error-message">ボスデータの読み込みに失敗しました。</div>';
             }
-        });
-        
-        // レベル順にソート
-        Object.keys(bossData).forEach(bossName => {
-            bossData[bossName].sort((a, b) => {
-                const levelA = parseInt(a.level.replace('Lv', ''));
-                const levelB = parseInt(b.level.replace('Lv', ''));
-                return levelA - levelB;
-            });
-        });
-        
-        console.log('Loaded boss data:', bossData); // デバッグ用
-        
-        // セレクトボックスの初期化
-        initializeSelectors();
-        
-    } catch (error) {
-        console.error('Error loading boss data:', error);
-        document.getElementById('bossContainer').innerHTML = 
-            '<div class="error-message">ボスデータの読み込みに失敗しました。</div>';
-    }
-}
+        }
 
         // セレクトボックスの初期化関数
         function initializeSelectors() {
@@ -205,7 +212,6 @@ async function loadBossData() {
             
             selectors.forEach(selectorId => {
                 const select = document.getElementById(selectorId);
-                // 既存のオプションをクリア
                 select.innerHTML = '<option value="">ボスを選択</option>';
                 
                 bosses.forEach(boss => {
