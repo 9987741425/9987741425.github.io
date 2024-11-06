@@ -129,63 +129,74 @@
         let bossData = {};
 
         // CSVからデータを読み込む関数
-        async function loadBossData() {
-            try {
-                const response = await fetch('https://raw.githubusercontent.com/9987741425/9987741425.github.io/main/bosses.csv');
-                const csvText = await response.text();
-                
-                // CSVパース
-                const rows = csvText.split('\n').slice(1); // ヘッダーをスキップ
-                
-                rows.forEach(row => {
-                    if (!row.trim()) return;
-                    
-                    // 行をカンマで分割
-                    const cells = row.split(',');
-                    if (cells.length < 4) return; // 無効な行をスキップ
+async function loadBossData() {
+    try {
+        const response = await fetch('https://raw.githubusercontent.com/9987741425/9987741425.github.io/main/bosses.csv');
+        const csvText = await response.text();
+        
+        // CSVパース
+        const rows = csvText.split('\n');
+        let currentBoss = '';
+        
+        rows.forEach(row => {
+            if (!row.trim()) return;
+            
+            // データを解析
+            const match = row.match(/^([^バフ名]+)(バフ名Lv\d+)?(.+)?$/);
+            if (!match) return;
 
-                    const [bossName, level, name, description] = cells;
-                    
-                    // ボス名が空の場合はスキップ
-                    if (!bossName.trim()) return;
-                    
-                    // ボスデータの初期化
-                    if (!bossData[bossName]) {
-                        bossData[bossName] = [];
-                    }
-                    
-                    // 既存のレベルのバフがあれば更新、なければ追加
-                    const existingBuff = bossData[bossName].find(buff => buff.level === level);
+            let [_, bossName, lvPart, rest] = match;
+            bossName = bossName.trim();
+
+            if (bossName && !bossName.includes('バフ')) {
+                currentBoss = bossName;
+                if (!bossData[currentBoss]) {
+                    bossData[currentBoss] = [];
+                }
+            }
+
+            if (lvPart) {
+                const level = "Lv" + lvPart.match(/\d+/)[0];
+                const name = rest.replace(/バフ説明Lv\d+/, '').trim();
+                const nextRow = rows[rows.indexOf(row) + 1];
+                const description = nextRow ? nextRow.replace(/^[^バフ説明]*バフ説明Lv\d+/, '').trim() : '';
+
+                if (currentBoss && name && description) {
+                    const existingBuff = bossData[currentBoss].find(buff => buff.level === level);
                     if (existingBuff) {
                         existingBuff.name = name;
                         existingBuff.description = description;
                     } else {
-                        bossData[bossName].push({
-                            level: level,
-                            name: name,
-                            description: description
+                        bossData[currentBoss].push({
+                            level,
+                            name,
+                            description
                         });
                     }
-                });
-                
-                // レベル順にソート
-                Object.keys(bossData).forEach(bossName => {
-                    bossData[bossName].sort((a, b) => {
-                        const levelA = parseInt(a.level.replace('Lv', ''));
-                        const levelB = parseInt(b.level.replace('Lv', ''));
-                        return levelA - levelB;
-                    });
-                });
-                
-                // セレクトボックスの初期化
-                initializeSelectors();
-                
-            } catch (error) {
-                console.error('Error loading boss data:', error);
-                document.getElementById('bossContainer').innerHTML = 
-                    '<div class="error-message">ボスデータの読み込みに失敗しました。</div>';
+                }
             }
-        }
+        });
+        
+        // レベル順にソート
+        Object.keys(bossData).forEach(bossName => {
+            bossData[bossName].sort((a, b) => {
+                const levelA = parseInt(a.level.replace('Lv', ''));
+                const levelB = parseInt(b.level.replace('Lv', ''));
+                return levelA - levelB;
+            });
+        });
+        
+        console.log('Loaded boss data:', bossData); // デバッグ用
+        
+        // セレクトボックスの初期化
+        initializeSelectors();
+        
+    } catch (error) {
+        console.error('Error loading boss data:', error);
+        document.getElementById('bossContainer').innerHTML = 
+            '<div class="error-message">ボスデータの読み込みに失敗しました。</div>';
+    }
+}
 
         // セレクトボックスの初期化関数
         function initializeSelectors() {
