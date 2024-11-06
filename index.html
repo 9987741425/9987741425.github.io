@@ -159,53 +159,53 @@
         </div>
     </div>
 
-    <script>
+<script>
+// bossDataの宣言を追加
+let bossData = {};
+
 function parseCSV(csvText) {
+    const lines = csvText.split(/\r?\n/);
     const result = [];
-    let isInQuotes = false;
-    let currentField = '';
-    let fields = [];
+    let currentRow = [];
+    let inQuotes = false;
+    let currentField = [];
     
-    // CSVテキストを1文字ずつ処理
-    for (let i = 0; i < csvText.length; i++) {
-        const char = csvText[i];
-        const nextChar = csvText[i + 1];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         
-        if (char === '"') {
-            if (isInQuotes && nextChar === '"') {
-                // エスケープされたダブルクォート
-                currentField += '"';
-                i++;
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            
+            if (char === '"') {
+                if (!inQuotes) {
+                    inQuotes = true;
+                } else if (line[j + 1] === '"') {
+                    currentField.push('"');
+                    j++;
+                } else {
+                    inQuotes = false;
+                }
+            } else if (char === ',' && !inQuotes) {
+                currentRow.push(currentField.join('').trim());
+                currentField = [];
             } else {
-                // クォートの開始または終了
-                isInQuotes = !isInQuotes;
+                currentField.push(char);
             }
-        } else if (char === ',' && !isInQuotes) {
-            // フィールドの区切り
-            fields.push(currentField.trim());
-            currentField = '';
-        } else if (char === '\n' && !isInQuotes) {
-            // 行の終わり
-            fields.push(currentField.trim());
-            if (fields.length > 1) { // ヘッダー行や空行を無視
-                result.push(fields);
-            }
-            fields = [];
-            currentField = '';
-        } else if (char === '\r') {
-            // キャリッジリターンは無視
-            continue;
-        } else {
-            currentField += char;
         }
-    }
-    
-    // 最後のフィールドを処理
-    if (currentField) {
-        fields.push(currentField.trim());
-    }
-    if (fields.length > 1) {
-        result.push(fields);
+        
+        // 行末の処理
+        if (inQuotes) {
+            // クォート内の場合は改行を追加
+            currentField.push('\n');
+        } else {
+            // 行を完了して新しい行を開始
+            currentRow.push(currentField.join('').trim());
+            if (currentRow.length > 1) { // 空行をスキップ
+                result.push(currentRow);
+            }
+            currentRow = [];
+            currentField = [];
+        }
     }
     
     return result;
@@ -218,13 +218,13 @@ async function loadBossData() {
         
         // CSVパース
         const rows = parseCSV(csvText);
-        let currentBoss = '';
-        let currentLevel = '';
-        let buffName = '';
         
         // ヘッダー行をスキップ
         for (let i = 1; i < rows.length; i++) {
-            const [boss, type, level, content] = rows[i];
+            const row = rows[i];
+            if (row.length < 4) continue; // 無効な行をスキップ
+            
+            const [boss, type, level, content] = row;
             
             // ボス名が空でない場合は処理
             if (boss && boss !== '不特定') {
@@ -232,31 +232,27 @@ async function loadBossData() {
                 if (!bossData[boss]) {
                     bossData[boss] = [];
                 }
-                currentBoss = boss;
                 
                 // バフ名の行の場合
                 if (type === 'バフ名') {
-                    currentLevel = level;
-                    buffName = content;
-                    
                     // 既存のバフを探す
-                    let existingBuff = bossData[currentBoss].find(buff => buff.level === level);
+                    let existingBuff = bossData[boss].find(buff => buff.level === level);
                     if (!existingBuff) {
                         // 新しいバフを追加
-                        bossData[currentBoss].push({
+                        bossData[boss].push({
                             level: level,
-                            name: buffName,
+                            name: content,
                             description: ''
                         });
                     } else {
                         // 既存のバフ名を更新
-                        existingBuff.name = buffName;
+                        existingBuff.name = content;
                     }
                 }
                 // バフ説明の行の場合
                 else if (type === 'バフ説明') {
                     // 対応するバフを探して説明を更新
-                    const buff = bossData[currentBoss].find(buff => buff.level === level);
+                    const buff = bossData[boss].find(buff => buff.level === level);
                     if (buff) {
                         // 改行を<br>タグに変換して保存
                         buff.description = content.replace(/\n/g, '<br>');
@@ -274,7 +270,9 @@ async function loadBossData() {
             });
         });
         
-        // セレクトボックスの初期化
+        console.log('Loaded boss data:', bossData); // デバッグ用
+        
+        // セレクトボックスを初期化
         initializeSelectors();
         
     } catch (error) {
@@ -284,7 +282,26 @@ async function loadBossData() {
     }
 }
 
-// HTML表示部分にスタイルを追加
+// セレクトボックスの初期化関数
+function initializeSelectors() {
+    const bosses = Object.keys(bossData).sort();
+    const selectors = ['boss1', 'boss2', 'boss3'];
+    
+    selectors.forEach(selectorId => {
+        const select = document.getElementById(selectorId);
+        select.innerHTML = '<option value="">ボスを選択してください</option>';
+        
+        bosses.forEach(boss => {
+            const option = document.createElement('option');
+            option.value = boss;
+            option.textContent = boss;
+            select.appendChild(option);
+        });
+    });
+    
+    updateDisplay();
+}
+
 function updateDisplay() {
     const container = document.getElementById('bossContainer');
     container.innerHTML = '';
@@ -319,8 +336,9 @@ function updateDisplay() {
         container.appendChild(card);
     });
 }
-        // ページ読み込み時にデータを取得
-        document.addEventListener('DOMContentLoaded', loadBossData);
-    </script>
+
+// ページ読み込み時にデータを取得
+document.addEventListener('DOMContentLoaded', loadBossData);
+</script>
 </body>
 </html>
