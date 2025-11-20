@@ -126,14 +126,6 @@
             color: #1a237e;
             font-size: 1.1em;
         }
-        .debug-info {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            font-size: 0.9em;
-        }
         option {
             padding: 8px;
         }
@@ -162,7 +154,6 @@
                 </select>
             </div>
         </div>
-        <div id="debugInfo" class="debug-info" style="display: none;"></div>
         <div id="bossContainer" class="boss-container">
             <div class="loading">データを読み込み中...</div>
         </div>
@@ -230,10 +221,6 @@ async function loadBossData() {
         const rows = parseCSV(csvText);
         console.log('Parsed rows:', rows.length);
         
-        const debugInfo = document.getElementById('debugInfo');
-        debugInfo.style.display = 'block';
-        debugInfo.innerHTML = `読み込んだ行数: ${rows.length}`;
-        
         // データを処理
         const tempData = {};
         
@@ -278,8 +265,6 @@ async function loadBossData() {
         
         console.log('Final boss data:', bossData);
         console.log('Boss names:', Object.keys(bossData));
-        
-        debugInfo.innerHTML += `<br>ボス数: ${Object.keys(bossData).length}<br>ボス名: ${Object.keys(bossData).join(', ')}`;
         
         initializeSelectors();
         
